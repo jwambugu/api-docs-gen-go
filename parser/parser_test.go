@@ -3,10 +3,7 @@ package parser
 import "testing"
 
 func TestParse(t *testing.T) {
-	parser, err := NewParser("*.go")
-	if err != nil {
-		t.Fatalf("new parser want no error, got %v", err)
-	}
+	parser := New(WithPattern("*.go"), WithOutput(OutputHTML))
 
 	endpoints, err := parser.Parse()
 	if err != nil {

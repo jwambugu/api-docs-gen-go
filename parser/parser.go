@@ -24,6 +24,20 @@ const _responsePrefix = "@response"
 // _parametersPrefix is the prefix used in comments to specify the parameters accepted by the endpoint.
 const _parametersPrefix = "@parameters"
 
+// Output represents the format in which the API documentation can be generated.
+type Output string
+
+const (
+	// OutputJSON specifies that the API documentation should be generated in JSON format.
+	OutputJSON Output = "json"
+
+	// OutputYAML specifies that the API documentation should be generated in YAML format.
+	OutputYAML Output = "yaml"
+
+	// OutputHTML specifies that the API documentation should be generated in HTML format.
+	OutputHTML Output = "html"
+)
+
 // Parameter represents an individual parameter for an API endpoint.
 type Parameter struct {
 	Name     string `json:"name"`
@@ -45,19 +59,52 @@ type Endpoint struct {
 type Parser struct {
 	files   []string
 	pattern string
+	output  Output
+}
+
+// WithPattern is a functional option for configuring the pattern used by a Parser.
+// If the provided pattern is empty, it defaults to "*.go".
+func WithPattern(pattern string) func(*Parser) {
+	return func(p *Parser) {
+		if pattern != "" {
+			p.pattern = pattern
+		}
+	}
+}
+
+// WithOutput is a functional option for configuring the output format used by a Parser.
+// If the provided output format is empty, it defaults to OutputJSON.
+func WithOutput(output Output) func(*Parser) {
+	return func(p *Parser) {
+		if output != "" {
+			p.output = output
+		}
+	}
 }
 
 // Parse analyzes the files matched by the parser's pattern and extracts API endpoint information.
 // It returns a slice of Endpoint structs containing metadata about each API endpoint found.
 func (p *Parser) Parse() ([]Endpoint, error) {
-	var endpoints []Endpoint
+	var (
+		endpoints []Endpoint
+		err       error
+	)
+
+	p.files, err = filepath.Glob(p.pattern)
+	if err != nil {
+		return nil, fmt.Errorf("parser: glob pattern: %w", err)
+	}
+
+	if len(p.files) == 0 {
+		return nil, fmt.Errorf("parser: no files to parse")
+	}
 
 	for _, file := range p.files {
 		fset := token.NewFileSet()
 
 		f, err := parser.ParseFile(fset, file, nil, parser.ParseComments)
 		if err != nil {
-			return nil, fmt.Errorf("parse file: %v", err)
+			return nil, fmt.Errorf("parser: parse file: %v", err)
 		}
 
 		ast.Inspect(f, func(node ast.Node) bool {
@@ -116,25 +163,18 @@ func (p *Parser) Parse() ([]Endpoint, error) {
 	return endpoints, nil
 }
 
-// NewParser creates a new Parser instance based on the provided pattern.
+// New creates a new Parser instance based on the provided pattern.
 // The pattern specifies the structure or format that the parser will use to interpret data.
 // If the pattern is empty, it defaults to "*.go" to match Go source files.
-func NewParser(pattern string) (*Parser, error) {
-	if pattern == "" {
-		pattern = "*.go"
+func New(options ...func(*Parser)) *Parser {
+	p := &Parser{
+		pattern: "*.go",
+		output:  OutputJSON,
 	}
 
-	files, err := filepath.Glob(pattern)
-	if err != nil {
-		return nil, fmt.Errorf("glob pattern: %v", err)
+	for _, option := range options {
+		option(p)
 	}
 
-	if len(files) == 0 {
-		return nil, fmt.Errorf("no files to parse")
-	}
-
-	return &Parser{
-		files:   files,
-		pattern: pattern,
-	}, nil
+	return p
 }
