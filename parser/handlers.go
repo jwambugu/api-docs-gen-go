@@ -8,7 +8,7 @@ import "net/http"
 // @response GetUsersResponse
 func GetUsersHandler(w http.ResponseWriter, r *http.Request) {}
 
-// @docs CreateUserHandler handles the creation of a new user
+// @docs CreateUserHandler handles the creation of a new user.
 // @path /users
 // @method POST
 // @parameters name string true
