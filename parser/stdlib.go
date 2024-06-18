@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"reflect"
 )
 
 type Middleware func(handler http.Handler) http.Handler
@@ -36,16 +37,42 @@ func StdLib(next http.HandlerFunc) http.HandlerFunc {
 		responseWriter := &stdResponseWriter{w: w}
 		next.ServeHTTP(responseWriter, r)
 
-		if body := responseWriter.body; body != nil {
-			var resp any
-			if err := json.Unmarshal(body, &resp); err != nil {
-				log.Printf("decode body: %v", err)
-				return
-			}
-
-			log.Printf("%T", resp)
+		respBody := responseWriter.body
+		if respBody == nil {
+			return
 		}
 
+		var resp any
+		if err := json.Unmarshal(respBody, &resp); err != nil {
+			return
+		}
+
+		switch out := resp.(type) {
+		case map[string]any:
+			for k, v := range out {
+				switch reflect.ValueOf(v).Kind() {
+				case reflect.String:
+					out[k] = ""
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64, reflect.Uint, reflect.Uint8, reflect.Uint16,
+					reflect.Uint32, reflect.Uint64, reflect.Float32, reflect.Float64:
+					out[k] = 0
+				case reflect.Bool:
+					out[k] = false
+				case reflect.Interface:
+					out[k] = map[string]string{}
+				case reflect.Array:
+				case reflect.Slice:
+					out[k] = []int{}
+				}
+			}
+		}
+
+		b, err := json.Marshal(resp)
+		if err != nil {
+			return
+		}
+
+		log.Printf("%s %s\n", r.URL.String(), string(b))
 	}
 }
 
