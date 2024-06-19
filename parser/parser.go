@@ -6,12 +6,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"gopkg.in/yaml.v3"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // _docsPrefix is the prefix used in comments to denote the start of API documentation.
@@ -55,6 +56,12 @@ type Parameter struct {
 	Type     string `json:"type"`
 }
 
+// Response is the API response body with it's status
+type Response struct {
+	Body       any `json:"body,omitempty"`
+	StatusCode int `json:"status_code,omitempty"`
+}
+
 // Endpoint represents an API endpoint with its associated metadata.
 // It includes the description, handler name, HTTP method, path, response type, and parameters.
 type Endpoint struct {
@@ -63,11 +70,12 @@ type Endpoint struct {
 	Method      string      `json:"method" yaml:"method"`
 	Path        string      `json:"path" yaml:"path"`
 	Response    string      `json:"response" yaml:"response"`
-	Parameters  []Parameter `json:"parameters" yaml:"parameters"`
+	Responses   []Response  `json:"responses,omitempty"`
+	Parameters  []Parameter `json:"parameters,omitempty" yaml:"parameters"`
 }
 
 type Parser struct {
-	endpoints []Endpoint
+	endpoints map[string]Endpoint
 	filename  string
 	files     []string
 	output    Output
@@ -189,14 +197,18 @@ func (p *Parser) Parse() ([]Endpoint, error) {
 					}
 				}
 
-				p.endpoints = append(p.endpoints, endpoint)
+				p.endpoints[endpoint.Path] = endpoint
 			}
 			return true
 		})
-
 	}
 
-	return p.endpoints, nil
+	endpoints := make([]Endpoint, len(p.endpoints))
+	for _, endpoint := range p.endpoints {
+		endpoints = append(endpoints, endpoint)
+	}
+
+	return endpoints, nil
 }
 
 // ToFile writes the generated API documentation to the specified file using the preferred Output format.
@@ -250,9 +262,10 @@ func (p *Parser) ToFile() error {
 // If the pattern is empty, it defaults to "*.go" to match Go source files.
 func New(options ...func(*Parser)) *Parser {
 	p := &Parser{
-		filename: _outputFilename,
-		output:   OutputJSON,
-		pattern:  "*.go",
+		endpoints: make(map[string]Endpoint),
+		filename:  _outputFilename,
+		output:    OutputJSON,
+		pattern:   "*.go",
 	}
 
 	for _, option := range options {

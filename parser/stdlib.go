@@ -32,7 +32,7 @@ func (std *stdResponseWriter) WriteHeader(statusCode int) {
 	std.w.WriteHeader(statusCode)
 }
 
-func StdLib(next http.HandlerFunc) http.HandlerFunc {
+func StdLib(next http.HandlerFunc, parser *Parser) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		responseWriter := &stdResponseWriter{w: w}
 		next.ServeHTTP(responseWriter, r)
@@ -67,12 +67,19 @@ func StdLib(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 
-		b, err := json.Marshal(resp)
-		if err != nil {
-			return
+		if len(parser.endpoints) == 0 {
+			parser.Parse()
 		}
 
-		log.Printf("%s %s\n", r.URL.String(), string(b))
+		endpoint, ok := parser.endpoints[r.URL.String()]
+		if ok {
+			endpoint.Responses = append(endpoint.Responses, Response{
+				Body:       resp,
+				StatusCode: responseWriter.statusCode,
+			})
+
+			parser.endpoints[r.URL.String()] = endpoint
+		}
 	}
 }
 
@@ -110,9 +117,10 @@ func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func Srv() {
+	p := New()
 	router := http.NewServeMux()
 	//router.HandleFunc("GET /users", StdLib(GetUsersHandler))
-	router.HandleFunc("GET /users", StdLib(CreateUserHandler))
+	router.HandleFunc("GET /users", StdLib(CreateUserHandler, p))
 
 	if err := http.ListenAndServe(":8000", router); err != nil {
 		log.Fatalln(err)
