@@ -2,7 +2,6 @@ package parser
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"reflect"
 )
@@ -71,58 +70,16 @@ func StdLib(next http.HandlerFunc, parser *Parser) http.HandlerFunc {
 			parser.Parse()
 		}
 
-		endpoint, ok := parser.endpoints[r.URL.String()]
+		key := getKey(r.Method, r.URL.String())
+
+		endpoint, ok := parser.endpoints[key]
 		if ok {
 			endpoint.Responses = append(endpoint.Responses, Response{
 				Body:       resp,
 				StatusCode: responseWriter.statusCode,
 			})
 
-			parser.endpoints[r.URL.String()] = endpoint
+			parser.endpoints[key] = endpoint
 		}
-	}
-}
-
-// @docs GetUsersHandler returns all users available.
-// @path /users
-// @method GET
-// @response GetUsersResponse
-func GetUsersHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(http.StatusText(http.StatusOK)))
-}
-
-type User struct {
-	Name string `json:"name"`
-}
-
-// @docs CreateUserHandler handles the creation of a new user.
-// @path /users
-// @method POST
-// @parameters name string true
-// @parameters email string true
-// @response CreateUserResponse
-func CreateUserHandler(w http.ResponseWriter, r *http.Request) {
-	resp := User{Name: "Jay"}
-
-	b, err := json.Marshal(resp)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte(http.StatusText(http.StatusInternalServerError)))
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(b)
-}
-
-func Srv() {
-	p := New()
-	router := http.NewServeMux()
-	//router.HandleFunc("GET /users", StdLib(GetUsersHandler))
-	router.HandleFunc("GET /users", StdLib(CreateUserHandler, p))
-
-	if err := http.ListenAndServe(":8000", router); err != nil {
-		log.Fatalln(err)
 	}
 }

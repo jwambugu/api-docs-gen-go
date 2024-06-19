@@ -197,18 +197,24 @@ func (p *Parser) Parse() ([]Endpoint, error) {
 					}
 				}
 
-				p.endpoints[endpoint.Path] = endpoint
+				key := getKey(endpoint.Method, endpoint.Path)
+				p.endpoints[key] = endpoint
 			}
 			return true
 		})
 	}
 
-	endpoints := make([]Endpoint, len(p.endpoints))
+	var endpoints []Endpoint
 	for _, endpoint := range p.endpoints {
 		endpoints = append(endpoints, endpoint)
 	}
 
 	return endpoints, nil
+}
+
+// getKey generates a key to be used for the endpoints
+func getKey(method, path string) string {
+	return method + path
 }
 
 // ToFile writes the generated API documentation to the specified file using the preferred Output format.
@@ -246,9 +252,11 @@ func (p *Parser) ToFile() error {
 		}
 	}
 
-	_, workingDir, _, _ := runtime.Caller(0)
-
-	p.filename = filepath.Join(filepath.Dir(workingDir), "..", p.filename)
+	if dirs := filepath.Dir(p.filename); len(dirs) == 0 {
+		// Assumes that the user wants to store the file on the working dir
+		_, workingDir, _, _ := runtime.Caller(0)
+		p.filename = filepath.Join(filepath.Dir(workingDir), "..", p.filename)
+	}
 
 	if err = os.WriteFile(p.filename, outputBytes, 0644); err != nil {
 		return fmt.Errorf("parser: write file - %v", err)
